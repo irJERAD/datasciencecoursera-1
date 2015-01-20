@@ -1,0 +1,210 @@
+---
+title: "CourseProjectPracticalMachineLearning"
+author: "mFriz"
+date: "Monday, January 19, 2015"
+output: html_document
+---
+
+## Data Acqusition and Data Cleaning
+
+First I looked at the data set and observed different kinds of empty or useless values. Those will be dealt with by setting
+```{r}
+na.strings=c("NA", "", "#DIV/0!")
+```
+when reading in the .csv file:
+
+To load the training data set, I put the corresponding .csv file into the current working directory. 
+```{r}
+data <- read.csv(file="pml-training.csv", header=TRUE, sep=",", na.strings=c("NA", "", "#DIV/0!"))                                                                   
+```
+How many rows and columns are there?
+```{r}
+nrow(data)
+ncol(data)
+```
+```
+summary(data)
+```
+There are a couple of variables with over 19215 NAs. This means less than 2.1% of the rows of such a variable have non-NAs in them. Although such variables may be helpful nontheless - considering there are 160 variables overall - they are removed from the dataframe. The following code will find the variables with too many NAs, i.e. more NAs than in "thresholdNA". 
+```{r}
+thresholdNA <- 19215
+lvNotTooManyNAs <- vector(mode="logical", length=ncol(data)) 
+```
+lv stands for logical vector. As the name suggests, a value is TRUE if there are not too many NAs in a certain column. 
+The following code wills the logical vector:
+```{r}
+for (i in 1:ncol(data)) {
+    if (length(which(is.na(data[ , i]))) > thresholdNA) {
+        lvNotTooManyNAs[i] <- FALSE
+    } else {
+        lvNotTooManyNAs[i] <- TRUE
+    }
+}
+```
+
+According to the logical vector, the data set is reduced, i.e. some columns removed. 
+```{r}
+data2 <- subset(data, select=lvNotTooManyNAs)
+```
+
+Let us look at data again. 
+```{r}
+ncol(data2)
+```
+```
+summary(data2)
+```
+
+There are some columns, that should be of no interest, such as the indices, user_name, the time stamp columns as well as the window number and wheather or not a new window was used. These will be removed:
+```{r}
+data3 <- data2[ , -c(1:7)]
+```
+We are now down to 53 accelerometer variables. 
+
+Finally, let us not forget to make classe a factor variable.
+```{r}
+data3$classe <- as.factor(data3$classe)
+```
+
+## Define Error Rate
+
+This problem at hand is a classification problem. The overall accuracy will be used to assess the validity of the models.  
+
+
+## Split Data into Training Set, Test Set
+
+There are 19 thousand rows, so I consider the data set large and split into 60% training/ 20% validation/ 20% test. 
+* The training set will be used to train the model.
+* The validation set will be used for choosing the model. 
+* The test set will only be used by the final model, in order to calculate the prediction error.
+
+```{r}
+library(caret)
+set.seed(2343)
+trainIndices <- createDataPartition(data3$classe, p = 0.60, list=FALSE)
+trainSet <- data3[trainIndices, ]
+tempSet <- data3[-trainIndices, ]
+valIndices <- createDataPartition(tempSet$classe, p = 0.5, list=FALSE)
+valSet <- tempSet[valIndices, ]
+testSet <- tempSet[-valIndices, ]
+```
+
+## On the Training Set, Pick Features and Use Cross-Validation.
+
+At this point, no further analysis of the features was done, i.e. all features will be used in the following. I note that I am aware of methods such as the principal component analysis. Removing more features will speed up the computation. Using cross-validation will slow it down. 
+
+## On the Training Set, Pick Prediction Functions and Use Cross-Validation. 
+There are countless models that can be used for classification problems. I will use the random forest model and the support vector machine model. 
+
+### Random Forest Model
+The random forest model will be used as the first model fit. The random forest model seems to be a good choice in most classification problems. See for example in "Do we need Hundreds of Classifiers to Solve Real World Classification Problems" in Journal of Machine Learning Reserach 15 (2014) 3133-3181. The result of that paper is that 
+
+>"The best results are achieved by the parallel random forest (parRF t), implemented in R with caret, tuning the parameter mtry. The parRF t achieves in average 94.1% of the maximum accuracy over all the data sets (Table 5, lower part), and overcomes the 90% of the maximum accuracy in 102 out of 121 data sets. Its average accuracy over all the data sets is 82.0%, while the maximum average accuracy (achieved by the best classifier for each data set) is 86.9%. The random forest in R and tuned with caret (rf t) is slightly worse (93.6% of the maximum accuracy), although it achieves slightly better average accuracy (82.3%) than parRF t." 
+
+Without any idea of how quick the calculation will be, I started off using the caret train() function.
+```
+set.seed(2343)
+modelFitCaretRfDefault <- train(classe~., data=trainSet, method="rf")
+```
+The result was not computed within 5 min. 
+
+I tried again the train() function, but now suppressing resampling (cross-validation, bootstrapping or other resampling techniques) and setting tuneLength to 1 to save time. 
+```
+set.seed(2343)
+ctrl <- trainControl(method="none")
+modelFitCaretRfNoResampling <- train(classe~., data=trainSet, method="rf", 
+                                        trainControl=ctrl,tuneLength=1)
+```
+Nevertheless, no result could be obtained within 5 min.
+
+I then decided to go for the randomForest() function of the randomForest library, without any resampling method.
+
+```{r}
+library(randomForest)
+set.seed(2343)
+ptm1 <- proc.time() # Start clock
+modelRandomForest <- randomForest(classe~., data=trainSet)
+ptmDiff <- proc.time() - ptm1 # Stop clock
+ptmDiff
+modelRandomForest
+```
+Indeed, here I got a model fit under 5 minutes. The out of bag estimate of the error rate is 0.72%, which looks already very promising. 
+
+### Support Vector Machine Model
+Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I try the caret train() function without resampling and tuneLength = 1, with a support vector machine model with radial basis functions.
+```
+set.seed(2343)
+ctrl <- trainControl(method="none")
+modelFitCaretSvmNoResampling <- train(classe~., data=trainSet, method="svmRadial", 
+                                        trainControl=ctrl,tuneLength=1)
+```
+Again, no luck within 5 minutes of computation time. So in the following I try the ksvm() function from the kernlab package directly.
+```{r}
+library(kernlab)
+set.seed(2343)
+ptm <- proc.time() # Start clock
+modelFitKsvm <- ksvm(classe~., data=trainSet, kernel="rbfdot", cross=0)
+ptmDiff <- proc.time() - ptm1 # Stop clock
+ptmDiff
+modelFitKsvm
+```
+Indeed, here I got a model fit under 5 minutes. Sigma is 1.3% and the error rate on the training set is 6.8%, which looks less promising than the random forest model. 
+
+## Choose Model by Predicting with Various Models on Validation Set
+### Random Forest Model
+```{r}
+predictionsOnValSetRandomForest <- predict(modelRandomForest, newdata=valSet)
+cmOnValSetRandomForest <- confusionMatrix(predictionsOnValSetRandomForest, valSet$classe)
+cmOnValSetRandomForest
+accuracyOnValSetRandomForest <- cmOnValSetRandomForest$overall['Accuracy']
+```
+The accuracy is 99.3%.
+
+### Support Vector Machine Model
+```{r}
+predictionsOnValSetKsvm <- predict(modelFitKsvm, newdata=valSet)
+cmOnValSetKsvm <- confusionMatrix(predictionsOnValSetKsvm, valSet$classe)
+cmOnValSetKsvm
+accuracyOnValSetKsvm <- cmOnValSetKsvm$overall['Accuracy']
+```
+The accuracy is 92.5%, which is indeed worse than the random forest model.
+
+## Apply Final Model on Test Data Set
+Among the two models I tried, random forest was better, on the training set as well as on the validation set. Therefore I will once more calculate the accuracy on an unknown data set, the test data set: 
+```{r}
+predictionsOnTestSetRandomForest <- predict(modelRandomForest, newdata=testSet)
+cmOnTestSetRandomForest <- confusionMatrix(predictionsOnTestSetRandomForest, testSet$classe)
+cmOnTestSetRandomForest
+accuracyOnTestSetRandomForest <- cmOnTestSetRandomForest$overall['Accuracy']
+```
+*The accuracy is 99.3%, the same as it was on the validation set. That the values are the same is a good sign that the model will deal well with unknown data. The predicted out of sample error is 1 - accuracy = 0.7%.* 
+
+## Predict on Quizz Data
+
+Load quizz data set:
+```{r}
+quizzDataSet <- read.csv(file="pml-testing.csv", header=TRUE, sep=",", na.strings=c("NA", "", "#DIV/0!")) 
+```
+No useless variables were removed, as they do not "hurt". I note that normally, any preprocessing that was previously done on the training set, should equally be applied to any other validation, test, or quizz data set. This is especially true for dealing with NAs and NANs, and preprocessing such as box cox transformation. 
+
+
+```{r}
+predictionsOnQuizzSetWithRandomForest <- predict(modelRandomForest, newdata=quizzDataSet)
+predictionsOnQuizzSetWithRandomForest
+answers <- predictionsOnQuizzSetWithRandomForest
+```
+
+The following script was supplied in the assignment tasks. It writes single text files for each of the quizz data set rows. In each text file, the class will be written (A, B, C, D or E)
+```
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+## THE END
