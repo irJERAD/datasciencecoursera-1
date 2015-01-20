@@ -206,5 +206,6 @@ pml_write_files = function(x){
 
 pml_write_files(answers)
 ```
+It is noted that all the test set data were classified correctly!
 
 ## THE END
