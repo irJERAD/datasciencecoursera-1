@@ -145,7 +145,7 @@ modelRandomForest &lt;- randomForest(classe~., data=trainSet)
 ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   37.82    0.17   37.98</code></pre>
+##   38.36    0.13   38.72</code></pre>
 <pre class="r"><code>modelRandomForest</code></pre>
 <pre><code>## 
 ## Call:
@@ -180,7 +180,7 @@ modelFitKsvm &lt;- ksvm(classe~., data=trainSet, kernel=&quot;rbfdot&quot;, cros
 <pre class="r"><code>ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   69.35    1.15   70.49</code></pre>
+##   70.59    1.12   71.94</code></pre>
 <pre class="r"><code>modelFitKsvm</code></pre>
 <pre><code>## Support Vector Machine object of class &quot;ksvm&quot; 
 ## 
@@ -339,6 +339,7 @@ predictionsOnQuizzSetWithRandomForest</code></pre>
 }
 
 pml_write_files(answers)</code></pre>
+<p>It is noted that all the test set data were classified correctly!</p>
 </div>
 <div id="the-end" class="section level2">
 <h2>THE END</h2>
