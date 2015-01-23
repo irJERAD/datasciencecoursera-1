@@ -96,102 +96,125 @@ At this point, no further analysis of the features was done, i.e. all features w
 ## On the Training Set, Pick Prediction Functions and Use Cross-Validation. 
 There are countless models that can be used for classification problems. I will use the random forest model and the support vector machine model. 
 
+### Setting up parallel processing
+Before starting the training, I will set up some workers for parallel computation. 
+```{r parallel}
+library(doParallel)
+numberCores <- detectCores()
+cl <- makeCluster(numberCores - 1) # leave one core to not block the PC
+registerDoParallel(cl)
+getDoParWorkers()
+```
+Caret should be able to use these workers without the user doing anything. Note that 
+allowParallel = TRUE is the default in trainControl(). 
+
 ### Random Forest Model
 The random forest model will be used as the first model fit. The random forest model seems to be a good choice in most classification problems. See for example in "Do we need Hundreds of Classifiers to Solve Real World Classification Problems" in Journal of Machine Learning Reserach 15 (2014) 3133-3181. The result of that paper is that 
 
 >"The best results are achieved by the parallel random forest (parRF t), implemented in R with caret, tuning the parameter mtry. The parRF t achieves in average 94.1% of the maximum accuracy over all the data sets (Table 5, lower part), and overcomes the 90% of the maximum accuracy in 102 out of 121 data sets. Its average accuracy over all the data sets is 82.0%, while the maximum average accuracy (achieved by the best classifier for each data set) is 86.9%. The random forest in R and tuned with caret (rf t) is slightly worse (93.6% of the maximum accuracy), although it achieves slightly better average accuracy (82.3%) than parRF t." 
 
-Without any idea of how quick the calculation will be, I started off using the caret train() function.
-```
+With some prior test with the pure randomForest() function from the randomForest library to find out how quickly a single training can be done, the following model including some cross-validation is carried out:
+```{r caretRf train, cache=TRUE}
 set.seed(2343)
-modelFitCaretRfDefault <- train(classe~., data=trainSet, method="rf")
-```
-The result was not computed within 5 min. 
-
-I tried again the train() function, but now suppressing resampling (cross-validation, bootstrapping or other resampling techniques) and setting tuneLength to 1 to save time. 
-```
-set.seed(2343)
-ctrl <- trainControl(method="none")
-modelFitCaretRfNoResampling <- train(classe~., data=trainSet, method="rf", 
-                                        trainControl=ctrl,tuneLength=1)
-```
-Nevertheless, no result could be obtained within 5 min.
-
-I then decided to go for the randomForest() function of the randomForest library, without any resampling method.
-
-```{r}
-library(randomForest)
+seeds <- vector(mode = "list", length = 50) # 50 = 7 * 7 +1
+for(i in 1:49) seeds[[i]] <- sample.int(1000, 7)
+seeds[[50]] <- sample.int(1000, 1)
 set.seed(2343)
 ptm1 <- proc.time() # Start clock
-modelRandomForest <- randomForest(classe~., data=trainSet)
+ctrl <- trainControl(method="cv", 
+                     number = 7,
+                     seeds=seeds)
+modelFitCaretRf <- train(classe~., 
+                                data=trainSet, 
+                                method="rf",
+                                trControl=ctrl,
+                                tuneLength=7)
 ptmDiff <- proc.time() - ptm1 # Stop clock
 ptmDiff
-modelRandomForest
+modelFitCaretRf
 ```
-Indeed, here I got a model fit under 5 minutes. The out of bag estimate of the error rate is 0.72%, which looks already very promising. 
 
 ### Support Vector Machine Model
-Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I try the caret train() function without resampling and tuneLength = 1, with a support vector machine model with radial basis functions.
-```
-set.seed(2343)
-ctrl <- trainControl(method="none")
-modelFitCaretSvmNoResampling <- train(classe~., data=trainSet, method="svmRadial", 
-                                        trainControl=ctrl,tuneLength=1)
-```
-Again, no luck within 5 minutes of computation time. So in the following I try the ksvm() function from the kernlab package directly.
+Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I used directly kerlab's ksvm() with a support vector machine model with radial basis functions. This way I got an idea of the computation time. In the following, carets train() function is used, together with some cross-validation and an increased tuneLength. 
 ```{r}
 library(kernlab)
+```
+```{r caretSvm train, cache=TRUE}
 set.seed(2343)
-ptm <- proc.time() # Start clock
-modelFitKsvm <- ksvm(classe~., data=trainSet, kernel="rbfdot", cross=0)
+seeds <- vector(mode = "list", length = 99) # 99 = 7 * 14 + 1
+for(i in 1:98) seeds[[i]] <- sample.int(1000, 14)
+seeds[[99]] <- sample.int(1000, 1)
+set.seed(2343)
+ptm1 <- proc.time() # Start clock
+ctrl <- trainControl(method="cv", 
+                     number = 7,
+                     seeds=seeds)
+modelFitCaretSvm <- train(classe~., 
+                                      data=trainSet, 
+                                      method="svmRadial",
+                                      trControl=ctrl,
+                                      tuneLength=14)
 ptmDiff <- proc.time() - ptm1 # Stop clock
 ptmDiff
-modelFitKsvm
+modelFitCaretSvm
 ```
-Indeed, here I got a model fit under 5 minutes. Sigma is 1.3% and the error rate on the training set is 6.8%, which looks less promising than the random forest model. 
 
 ## Choose Model by Predicting with Various Models on Validation Set
 ### Random Forest Model
-```{r}
-predictionsOnValSetRandomForest <- predict(modelRandomForest, newdata=valSet)
-cmOnValSetRandomForest <- confusionMatrix(predictionsOnValSetRandomForest, valSet$classe)
-cmOnValSetRandomForest
-accuracyOnValSetRandomForest <- cmOnValSetRandomForest$overall['Accuracy']
+```{r predict on valSet with caretRf}
+predictionsOnValSetCaretRf <- predict(modelFitCaretRf, newdata=valSet)
+cmOnValSetCaretRf <- confusionMatrix(predictionsOnValSetCaretRf, valSet$classe)
+cmOnValSetCaretRf
+accuracyOnValSetCaretRf <- cmOnValSetCaretRf$overall['Accuracy']
 ```
-The accuracy is 99.3%.
 
 ### Support Vector Machine Model
-```{r}
-predictionsOnValSetKsvm <- predict(modelFitKsvm, newdata=valSet)
-cmOnValSetKsvm <- confusionMatrix(predictionsOnValSetKsvm, valSet$classe)
-cmOnValSetKsvm
-accuracyOnValSetKsvm <- cmOnValSetKsvm$overall['Accuracy']
+
+```{r predict on vatSet with caretSvm}
+predictionsOnValSetCaretSvm <- predict(modelFitCaretSvm, newdata=valSet)
+cmOnValSetCaretSvm <- confusionMatrix(predictionsOnValSetCaretSvm, valSet$classe)
+cmOnValSetCaretSvm
+accuracyOnValSetCaretSvm <- cmOnValSetCaretSvm$overall['Accuracy']
 ```
-The accuracy is 92.5%, which is indeed worse than the random forest model.
+
+### Comparison of both models
+```{r accuracy comparison}
+accuracyOnValSetCaretRf
+accuracyOnValSetCaretSvm
+```
+
+We saw that by using the higher tuneLength in the SVM model, the accuracy of this model almost matched the one of the random forest, but even then it was still a bit behind. The random forest model had a very high accuracy already in the second step. 
 
 ## Apply Final Model on Test Data Set
 Among the two models I tried, random forest was better, on the training set as well as on the validation set. Therefore I will once more calculate the accuracy on an unknown data set, the test data set: 
-```{r}
-predictionsOnTestSetRandomForest <- predict(modelRandomForest, newdata=testSet)
-cmOnTestSetRandomForest <- confusionMatrix(predictionsOnTestSetRandomForest, testSet$classe)
-cmOnTestSetRandomForest
-accuracyOnTestSetRandomForest <- cmOnTestSetRandomForest$overall['Accuracy']
+```{r predict on testSet with caretRf}
+predictionsOnTestSetCaretRf <- predict(modelFitCaretRf, newdata=testSet)
+cmOnTestSetCaretRf <- confusionMatrix(predictionsOnTestSetCaretRf, testSet$classe)
+cmOnTestSetCaretRf
+accuracyOnTestSetCaretRf <- cmOnTestSetCaretRf$overall['Accuracy']
 ```
-*The accuracy is 99.3%, the same as it was on the validation set. That the values are the same is a good sign that the model will deal well with unknown data. The predicted out of sample error is 1 - accuracy = 0.7%.* 
+
+### Out of sample error
+```{r out of sample error of final model}
+accuracyOnTestSetCaretRf
+outOfSampleError <- 1 - accuracyOnTestSetCaretRf
+outOfSampleError
+```
+The accuracy on the validation set was pretty equal to that of the test set, wich is is a good sign that the model will deal well with unknown data and was not overfitted to the training data set. The predicted out of sample error is `r outOfSampleError`. 
 
 ## Predict on Quizz Data
 
 Load quizz data set:
-```{r}
+```{r read in quizz data set}
 quizzDataSet <- read.csv(file="pml-testing.csv", header=TRUE, sep=",", na.strings=c("NA", "", "#DIV/0!")) 
 ```
 No useless variables were removed, as they do not "hurt". I note that normally, any preprocessing that was previously done on the training set, should equally be applied to any other validation, test, or quizz data set. This is especially true for dealing with NAs and NANs, and preprocessing such as box cox transformation. 
 
 
-```{r}
-predictionsOnQuizzSetWithRandomForest <- predict(modelRandomForest, newdata=quizzDataSet)
-predictionsOnQuizzSetWithRandomForest
-answers <- predictionsOnQuizzSetWithRandomForest
+```{r predict on quizzSet with caretRf}
+predictionsOnQuizzSetCaretRf <- predict(modelFitCaretRf, newdata=quizzDataSet)
+predictionsOnQuizzSetCaretRf
+answers <- predictionsOnQuizzSetCaretRf
 ```
 
 The following script was supplied in the assignment tasks. It writes single text files for each of the quizz data set rows. In each text file, the class will be written (A, B, C, D or E)
@@ -207,5 +230,3 @@ pml_write_files = function(x){
 pml_write_files(answers)
 ```
 It is noted that all the test set data were classified correctly!
-
-## THE END

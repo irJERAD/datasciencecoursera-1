@@ -132,8 +132,7 @@ modelFitCaretRfDefault &lt;- train(classe~., data=trainSet, method=&quot;rf&quot
 <p>I tried again the train() function, but now suppressing resampling (cross-validation, bootstrapping or other resampling techniques) and setting tuneLength to 1 to save time.</p>
 <pre><code>set.seed(2343)
 ctrl &lt;- trainControl(method=&quot;none&quot;)
-modelFitCaretRfNoResampling &lt;- train(classe~., data=trainSet, method=&quot;rf&quot;, 
-                                        trainControl=ctrl,tuneLength=1)</code></pre>
+modelFitCaretRfNoResampling &lt;- train(classe~., data=trainSet, method=&quot;rf&quot;, trControl=ctrl,tuneLength=1)</code></pre>
 <p>Nevertheless, no result could be obtained within 5 min.</p>
 <p>I then decided to go for the randomForest() function of the randomForest library, without any resampling method.</p>
 <pre class="r"><code>library(randomForest)</code></pre>
@@ -145,7 +144,7 @@ modelRandomForest &lt;- randomForest(classe~., data=trainSet)
 ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   38.36    0.13   38.72</code></pre>
+##   46.31    0.15   46.75</code></pre>
 <pre class="r"><code>modelRandomForest</code></pre>
 <pre><code>## 
 ## Call:
@@ -169,18 +168,17 @@ ptmDiff</code></pre>
 <p>Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I try the caret train() function without resampling and tuneLength = 1, with a support vector machine model with radial basis functions.</p>
 <pre><code>set.seed(2343)
 ctrl &lt;- trainControl(method=&quot;none&quot;)
-modelFitCaretSvmNoResampling &lt;- train(classe~., data=trainSet, method=&quot;svmRadial&quot;, 
-                                        trainControl=ctrl,tuneLength=1)</code></pre>
+modelFitCaretSvmNoResampling &lt;- train(classe~., data=trainSet, method=&quot;svmRadial&quot;, trControl=ctrl, tuneLength=1)</code></pre>
 <p>Again, no luck within 5 minutes of computation time. So in the following I try the ksvm() function from the kernlab package directly.</p>
-<pre class="r"><code>library(kernlab)
-set.seed(2343)
+<pre class="r"><code>library(kernlab)</code></pre>
+<pre class="r"><code>set.seed(2343)
 ptm &lt;- proc.time() # Start clock
 modelFitKsvm &lt;- ksvm(classe~., data=trainSet, kernel=&quot;rbfdot&quot;, cross=0)</code></pre>
 <pre><code>## Using automatic sigma estimation (sigest) for RBF or laplace kernel</code></pre>
 <pre class="r"><code>ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   70.59    1.12   71.94</code></pre>
+##   80.34    1.20   82.57</code></pre>
 <pre class="r"><code>modelFitKsvm</code></pre>
 <pre><code>## Support Vector Machine object of class &quot;ksvm&quot; 
 ## 
@@ -341,8 +339,285 @@ predictionsOnQuizzSetWithRandomForest</code></pre>
 pml_write_files(answers)</code></pre>
 <p>It is noted that all the test set data were classified correctly!</p>
 </div>
-<div id="the-end" class="section level2">
-<h2>THE END</h2>
+<div id="test-with-longer-execution-times." class="section level2">
+<h2>Test with longer execution times.</h2>
+<div id="setting-up-parallel-processing" class="section level3">
+<h3>Setting up parallel processing</h3>
+<pre class="r"><code>library(doParallel)</code></pre>
+<pre><code>## Loading required package: foreach
+## Loading required package: iterators
+## Loading required package: parallel</code></pre>
+<pre class="r"><code>numberCores &lt;- detectCores()
+cl &lt;- makeCluster(numberCores - 1) # leave one core to not block the PC
+registerDoParallel(cl)
+getDoParWorkers()</code></pre>
+<pre><code>## [1] 7</code></pre>
+<p>Caret should be able to use these workers without the user doing anything. Note that allowParallel = TRUE is the default in trainControl().</p>
+</div>
+<div id="caret-train-with-random-forest" class="section level3">
+<h3>Caret train() with random forest</h3>
+<p>Let’s try again the caret train, this time with some cross validation.</p>
+<pre class="r"><code>set.seed(2343)
+seeds &lt;- vector(mode = &quot;list&quot;, length = 50) # 50 = 7 * 7 +1
+for(i in 1:49) seeds[[i]] &lt;- sample.int(1000, 7)
+seeds[[50]] &lt;- sample.int(1000, 1)
+set.seed(2343)
+ptm1 &lt;- proc.time() # Start clock
+ctrl &lt;- trainControl(method=&quot;cv&quot;, 
+                     number = 7,
+                     seeds=seeds)
+modelFitCaretRf &lt;- train(classe~., 
+                                data=trainSet, 
+                                method=&quot;rf&quot;,
+                                trControl=ctrl,
+                                tuneLength=7)
+ptmDiff &lt;- proc.time() - ptm1 # Stop clock
+ptmDiff</code></pre>
+<pre><code>##    user  system elapsed 
+##   50.76    0.25  499.94</code></pre>
+<pre class="r"><code>modelFitCaretRf</code></pre>
+<pre><code>## Random Forest 
+## 
+## 11776 samples
+##    52 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (7 fold) 
+## 
+## Summary of sample sizes: 10093, 10094, 10096, 10093, 10095, 10092, ... 
+## 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa      Accuracy SD  Kappa SD   
+##    2    0.9883676  0.9852836  0.002604344  0.003294419
+##   10    0.9904905  0.9879701  0.003802264  0.004808764
+##   18    0.9903204  0.9877553  0.002942614  0.003722102
+##   27    0.9877735  0.9845328  0.004278976  0.005412539
+##   35    0.9855658  0.9817383  0.004092591  0.005178205
+##   43    0.9820844  0.9773351  0.003983973  0.005039796
+##   52    0.9780086  0.9721762  0.004580472  0.005796431
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 10.</code></pre>
+<pre class="r"><code>predictionsOnValSetCaretRf &lt;- predict(modelFitCaretRf, newdata=valSet)
+cmOnValSetCaretRf &lt;- confusionMatrix(predictionsOnValSetCaretRf, valSet$classe)
+cmOnValSetCaretRf</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1114    4    0    0    0
+##          B    1  755    5    0    0
+##          C    0    0  679    6    0
+##          D    0    0    0  637    6
+##          E    1    0    0    0  715
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9941          
+##                  95% CI : (0.9912, 0.9963)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9926          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9982   0.9947   0.9927   0.9907   0.9917
+## Specificity            0.9986   0.9981   0.9981   0.9982   0.9997
+## Pos Pred Value         0.9964   0.9921   0.9912   0.9907   0.9986
+## Neg Pred Value         0.9993   0.9987   0.9985   0.9982   0.9981
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2840   0.1925   0.1731   0.1624   0.1823
+## Detection Prevalence   0.2850   0.1940   0.1746   0.1639   0.1825
+## Balanced Accuracy      0.9984   0.9964   0.9954   0.9944   0.9957</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretRf &lt;- cmOnValSetCaretRf$overall['Accuracy']
+
+predictionsOnTestSetCaretRf &lt;- predict(modelFitCaretRf, newdata=testSet)
+cmOnTestSetCaretRf &lt;- confusionMatrix(predictionsOnTestSetCaretRf, testSet$classe)
+cmOnTestSetCaretRf</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1116    5    0    0    0
+##          B    0  753    4    0    0
+##          C    0    1  680   11    1
+##          D    0    0    0  632    5
+##          E    0    0    0    0  715
+## 
+## Overall Statistics
+##                                         
+##                Accuracy : 0.9931        
+##                  95% CI : (0.99, 0.9955)
+##     No Information Rate : 0.2845        
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16     
+##                                         
+##                   Kappa : 0.9913        
+##  Mcnemar's Test P-Value : NA            
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            1.0000   0.9921   0.9942   0.9829   0.9917
+## Specificity            0.9982   0.9987   0.9960   0.9985   1.0000
+## Pos Pred Value         0.9955   0.9947   0.9812   0.9922   1.0000
+## Neg Pred Value         1.0000   0.9981   0.9988   0.9967   0.9981
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2845   0.1919   0.1733   0.1611   0.1823
+## Detection Prevalence   0.2858   0.1930   0.1767   0.1624   0.1823
+## Balanced Accuracy      0.9991   0.9954   0.9951   0.9907   0.9958</code></pre>
+<pre class="r"><code>accuracyOnTestSetCaretRf &lt;- cmOnTestSetCaretRf$overall['Accuracy']</code></pre>
+</div>
+<div id="caret-train-with-support-vector-machine-model" class="section level3">
+<h3>Caret train() with support vector machine model</h3>
+<pre class="r"><code>set.seed(2343)
+seeds &lt;- vector(mode = &quot;list&quot;, length = 99) # 99 = 7 * 14 + 1
+for(i in 1:98) seeds[[i]] &lt;- sample.int(1000, 14)
+seeds[[99]] &lt;- sample.int(1000, 1)
+set.seed(2343)
+ptm1 &lt;- proc.time() # Start clock
+ctrl &lt;- trainControl(method=&quot;cv&quot;, 
+                     number = 7,
+                     seeds=seeds)
+modelFitCaretSvm &lt;- train(classe~., 
+                                      data=trainSet, 
+                                      method=&quot;svmRadial&quot;,
+                                      trControl=ctrl,
+                                      tuneLength=14)
+ptmDiff &lt;- proc.time() - ptm1 # Stop clock
+ptmDiff</code></pre>
+<pre><code>##    user  system elapsed 
+##   17.88    0.56  318.58</code></pre>
+<pre class="r"><code>modelFitCaretSvm</code></pre>
+<pre><code>## Support Vector Machines with Radial Basis Function Kernel 
+## 
+## 11776 samples
+##    52 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (7 fold) 
+## 
+## Summary of sample sizes: 10093, 10094, 10096, 10093, 10095, 10092, ... 
+## 
+## Resampling results across tuning parameters:
+## 
+##   C        Accuracy   Kappa      Accuracy SD  Kappa SD   
+##      0.25  0.8536887  0.8145257  0.011712693  0.014851721
+##      0.50  0.8902017  0.8607733  0.006050301  0.007646451
+##      1.00  0.9160189  0.8935231  0.006586669  0.008356362
+##      2.00  0.9429357  0.9277024  0.004284470  0.005437639
+##      4.00  0.9623816  0.9523595  0.002753930  0.003489792
+##      8.00  0.9727410  0.9654928  0.002648311  0.003355403
+##     16.00  0.9805538  0.9753915  0.001805372  0.002284046
+##     32.00  0.9858189  0.9820584  0.003115134  0.003941758
+##     64.00  0.9879419  0.9847456  0.002489371  0.003148734
+##    128.00  0.9898106  0.9871099  0.002457262  0.003108230
+##    256.00  0.9897253  0.9870026  0.001990230  0.002517450
+##    512.00  0.9894705  0.9866799  0.002780912  0.003518154
+##   1024.00  0.9882821  0.9851768  0.003022233  0.003823218
+##   2048.00  0.9886216  0.9856061  0.003017850  0.003817730
+## 
+## Tuning parameter 'sigma' was held constant at a value of 0.01255074
+## Accuracy was used to select the optimal model using  the largest value.
+## The final values used for the model were sigma = 0.01255074 and C = 128.</code></pre>
+<pre class="r"><code>predictionsOnValSetCaretSvm &lt;- predict(modelFitCaretSvm, newdata=valSet)
+cmOnValSetCaretSvm &lt;- confusionMatrix(predictionsOnValSetCaretSvm, valSet$classe)
+cmOnValSetCaretSvm</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1112    3    0    0    0
+##          B    2  753    2    0    2
+##          C    0    3  678   13    2
+##          D    0    0    3  629    0
+##          E    2    0    1    1  717
+## 
+## Overall Statistics
+##                                          
+##                Accuracy : 0.9913         
+##                  95% CI : (0.9879, 0.994)
+##     No Information Rate : 0.2845         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.989          
+##  Mcnemar's Test P-Value : NA             
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9964   0.9921   0.9912   0.9782   0.9945
+## Specificity            0.9989   0.9981   0.9944   0.9991   0.9988
+## Pos Pred Value         0.9973   0.9921   0.9741   0.9953   0.9945
+## Neg Pred Value         0.9986   0.9981   0.9981   0.9957   0.9988
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2835   0.1919   0.1728   0.1603   0.1828
+## Detection Prevalence   0.2842   0.1935   0.1774   0.1611   0.1838
+## Balanced Accuracy      0.9977   0.9951   0.9928   0.9887   0.9966</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretSvm &lt;- cmOnValSetCaretSvm$overall['Accuracy']
+
+predictionsOnTestSetCaretSvm &lt;- predict(modelFitCaretSvm, newdata=testSet)
+cmOnTestSetCaretSvm &lt;- confusionMatrix(predictionsOnTestSetCaretSvm, testSet$classe)
+cmOnTestSetCaretSvm</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1113    5    0    0    0
+##          B    2  752    2    0    0
+##          C    0    2  680   20    0
+##          D    0    0    2  623    4
+##          E    1    0    0    0  717
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9903          
+##                  95% CI : (0.9867, 0.9931)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9877          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9973   0.9908   0.9942   0.9689   0.9945
+## Specificity            0.9982   0.9987   0.9932   0.9982   0.9997
+## Pos Pred Value         0.9955   0.9947   0.9687   0.9905   0.9986
+## Neg Pred Value         0.9989   0.9978   0.9988   0.9939   0.9988
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2837   0.1917   0.1733   0.1588   0.1828
+## Detection Prevalence   0.2850   0.1927   0.1789   0.1603   0.1830
+## Balanced Accuracy      0.9978   0.9948   0.9937   0.9835   0.9971</code></pre>
+<pre class="r"><code>accuracyOnTestSetCaretSvm &lt;- cmOnTestSetCaretSvm$overall['Accuracy']</code></pre>
+<pre class="r"><code>accuracyOnValSetRandomForest</code></pre>
+<pre><code>##  Accuracy 
+## 0.9931175</code></pre>
+<pre class="r"><code>accuracyOnTestSetRandomForest</code></pre>
+<pre><code>##  Accuracy 
+## 0.9928626</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretRf</code></pre>
+<pre><code>##  Accuracy 
+## 0.9941371</code></pre>
+<pre class="r"><code>accuracyOnTestSetCaretRf</code></pre>
+<pre><code>##  Accuracy 
+## 0.9931175</code></pre>
+<pre class="r"><code>accuracyOnValSetKsvm</code></pre>
+<pre><code>##  Accuracy 
+## 0.9248024</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretSvm</code></pre>
+<pre><code>##  Accuracy 
+## 0.9913332</code></pre>
+<pre class="r"><code>accuracyOnTestSetCaretSvm</code></pre>
+<pre><code>##  Accuracy 
+## 0.9903135</code></pre>
+</div>
 </div>
 
 
