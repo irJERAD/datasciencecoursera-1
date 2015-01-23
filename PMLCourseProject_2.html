@@ -74,7 +74,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <p>There are a couple of variables with over 19215 NAs. This means less than 2.1% of the rows of such a variable have non-NAs in them. Although such variables may be helpful nontheless - considering there are 160 variables overall - they are removed from the dataframe. The following code will find the variables with too many NAs, i.e. more NAs than in “thresholdNA”.</p>
 <pre class="r"><code>thresholdNA &lt;- 19215
 lvNotTooManyNAs &lt;- vector(mode=&quot;logical&quot;, length=ncol(data)) </code></pre>
-<p>lv stands for logical vector. As the name suggests, a value is TRUE if there are not too many NAs in a certain column. The following code wills the logical vector:</p>
+<p>lv stands for logical vector. As the name suggests, a value is TRUE if there are not too many NAs in a certain column. The following code creates the logical vector:</p>
 <pre class="r"><code>for (i in 1:ncol(data)) {
     if (length(which(is.na(data[ , i]))) &gt; thresholdNA) {
         lvNotTooManyNAs[i] &lt;- FALSE
@@ -119,230 +119,9 @@ testSet &lt;- tempSet[-valIndices, ]</code></pre>
 <div id="on-the-training-set-pick-prediction-functions-and-use-cross-validation." class="section level2">
 <h2>On the Training Set, Pick Prediction Functions and Use Cross-Validation.</h2>
 <p>There are countless models that can be used for classification problems. I will use the random forest model and the support vector machine model.</p>
-<div id="random-forest-model" class="section level3">
-<h3>Random Forest Model</h3>
-<p>The random forest model will be used as the first model fit. The random forest model seems to be a good choice in most classification problems. See for example in “Do we need Hundreds of Classifiers to Solve Real World Classification Problems” in Journal of Machine Learning Reserach 15 (2014) 3133-3181. The result of that paper is that</p>
-<blockquote>
-<p>“The best results are achieved by the parallel random forest (parRF t), implemented in R with caret, tuning the parameter mtry. The parRF t achieves in average 94.1% of the maximum accuracy over all the data sets (Table 5, lower part), and overcomes the 90% of the maximum accuracy in 102 out of 121 data sets. Its average accuracy over all the data sets is 82.0%, while the maximum average accuracy (achieved by the best classifier for each data set) is 86.9%. The random forest in R and tuned with caret (rf t) is slightly worse (93.6% of the maximum accuracy), although it achieves slightly better average accuracy (82.3%) than parRF t.”</p>
-</blockquote>
-<p>Without any idea of how quick the calculation will be, I started off using the caret train() function.</p>
-<pre><code>set.seed(2343)
-modelFitCaretRfDefault &lt;- train(classe~., data=trainSet, method=&quot;rf&quot;)</code></pre>
-<p>The result was not computed within 5 min.</p>
-<p>I tried again the train() function, but now suppressing resampling (cross-validation, bootstrapping or other resampling techniques) and setting tuneLength to 1 to save time.</p>
-<pre><code>set.seed(2343)
-ctrl &lt;- trainControl(method=&quot;none&quot;)
-modelFitCaretRfNoResampling &lt;- train(classe~., data=trainSet, method=&quot;rf&quot;, trControl=ctrl,tuneLength=1)</code></pre>
-<p>Nevertheless, no result could be obtained within 5 min.</p>
-<p>I then decided to go for the randomForest() function of the randomForest library, without any resampling method.</p>
-<pre class="r"><code>library(randomForest)</code></pre>
-<pre><code>## randomForest 4.6-10
-## Type rfNews() to see new features/changes/bug fixes.</code></pre>
-<pre class="r"><code>set.seed(2343)
-ptm1 &lt;- proc.time() # Start clock
-modelRandomForest &lt;- randomForest(classe~., data=trainSet)
-ptmDiff &lt;- proc.time() - ptm1 # Stop clock
-ptmDiff</code></pre>
-<pre><code>##    user  system elapsed 
-##   46.31    0.15   46.75</code></pre>
-<pre class="r"><code>modelRandomForest</code></pre>
-<pre><code>## 
-## Call:
-##  randomForest(formula = classe ~ ., data = trainSet) 
-##                Type of random forest: classification
-##                      Number of trees: 500
-## No. of variables tried at each split: 7
-## 
-##         OOB estimate of  error rate: 0.72%
-## Confusion matrix:
-##      A    B    C    D    E class.error
-## A 3344    3    1    0    0 0.001194743
-## B   16 2256    7    0    0 0.010092146
-## C    0   19 2034    1    0 0.009737098
-## D    0    0   27 1899    4 0.016062176
-## E    0    0    1    6 2158 0.003233256</code></pre>
-<p>Indeed, here I got a model fit under 5 minutes. The out of bag estimate of the error rate is 0.72%, which looks already very promising.</p>
-</div>
-<div id="support-vector-machine-model" class="section level3">
-<h3>Support Vector Machine Model</h3>
-<p>Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I try the caret train() function without resampling and tuneLength = 1, with a support vector machine model with radial basis functions.</p>
-<pre><code>set.seed(2343)
-ctrl &lt;- trainControl(method=&quot;none&quot;)
-modelFitCaretSvmNoResampling &lt;- train(classe~., data=trainSet, method=&quot;svmRadial&quot;, trControl=ctrl, tuneLength=1)</code></pre>
-<p>Again, no luck within 5 minutes of computation time. So in the following I try the ksvm() function from the kernlab package directly.</p>
-<pre class="r"><code>library(kernlab)</code></pre>
-<pre class="r"><code>set.seed(2343)
-ptm &lt;- proc.time() # Start clock
-modelFitKsvm &lt;- ksvm(classe~., data=trainSet, kernel=&quot;rbfdot&quot;, cross=0)</code></pre>
-<pre><code>## Using automatic sigma estimation (sigest) for RBF or laplace kernel</code></pre>
-<pre class="r"><code>ptmDiff &lt;- proc.time() - ptm1 # Stop clock
-ptmDiff</code></pre>
-<pre><code>##    user  system elapsed 
-##   80.34    1.20   82.57</code></pre>
-<pre class="r"><code>modelFitKsvm</code></pre>
-<pre><code>## Support Vector Machine object of class &quot;ksvm&quot; 
-## 
-## SV type: C-svc  (classification) 
-##  parameter : cost C = 1 
-## 
-## Gaussian Radial Basis kernel function. 
-##  Hyperparameter : sigma =  0.0127876849478812 
-## 
-## Number of Support Vectors : 6185 
-## 
-## Objective Function Value : -930.6072 -788.7112 -690.9303 -423.2735 -877.2607 -503.4011 -664.5127 -908.233 -672.6654 -569.5999 
-## Training error : 0.06768</code></pre>
-<p>Indeed, here I got a model fit under 5 minutes. Sigma is 1.3% and the error rate on the training set is 6.8%, which looks less promising than the random forest model.</p>
-</div>
-</div>
-<div id="choose-model-by-predicting-with-various-models-on-validation-set" class="section level2">
-<h2>Choose Model by Predicting with Various Models on Validation Set</h2>
-<div id="random-forest-model-1" class="section level3">
-<h3>Random Forest Model</h3>
-<pre class="r"><code>predictionsOnValSetRandomForest &lt;- predict(modelRandomForest, newdata=valSet)
-cmOnValSetRandomForest &lt;- confusionMatrix(predictionsOnValSetRandomForest, valSet$classe)
-cmOnValSetRandomForest</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1114    5    0    0    0
-##          B    1  754    5    0    0
-##          C    0    0  679   10    0
-##          D    0    0    0  633    5
-##          E    1    0    0    0  716
-## 
-## Overall Statistics
-##                                         
-##                Accuracy : 0.9931        
-##                  95% CI : (0.99, 0.9955)
-##     No Information Rate : 0.2845        
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16     
-##                                         
-##                   Kappa : 0.9913        
-##  Mcnemar's Test P-Value : NA            
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9982   0.9934   0.9927   0.9844   0.9931
-## Specificity            0.9982   0.9981   0.9969   0.9985   0.9997
-## Pos Pred Value         0.9955   0.9921   0.9855   0.9922   0.9986
-## Neg Pred Value         0.9993   0.9984   0.9985   0.9970   0.9984
-## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2840   0.1922   0.1731   0.1614   0.1825
-## Detection Prevalence   0.2852   0.1937   0.1756   0.1626   0.1828
-## Balanced Accuracy      0.9982   0.9958   0.9948   0.9915   0.9964</code></pre>
-<pre class="r"><code>accuracyOnValSetRandomForest &lt;- cmOnValSetRandomForest$overall['Accuracy']</code></pre>
-<p>The accuracy is 99.3%.</p>
-</div>
-<div id="support-vector-machine-model-1" class="section level3">
-<h3>Support Vector Machine Model</h3>
-<pre class="r"><code>predictionsOnValSetKsvm &lt;- predict(modelFitKsvm, newdata=valSet)
-cmOnValSetKsvm &lt;- confusionMatrix(predictionsOnValSetKsvm, valSet$classe)
-cmOnValSetKsvm</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1099   82    4    1    2
-##          B    3  652   27    0    5
-##          C   11   25  638   70   24
-##          D    1    0   13  571   22
-##          E    2    0    2    1  668
-## 
-## Overall Statistics
-##                                           
-##                Accuracy : 0.9248          
-##                  95% CI : (0.9161, 0.9329)
-##     No Information Rate : 0.2845          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.9047          
-##  Mcnemar's Test P-Value : NA              
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9848   0.8590   0.9327   0.8880   0.9265
-## Specificity            0.9683   0.9889   0.9599   0.9890   0.9984
-## Pos Pred Value         0.9251   0.9491   0.8307   0.9407   0.9926
-## Neg Pred Value         0.9938   0.9669   0.9854   0.9783   0.9837
-## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2801   0.1662   0.1626   0.1456   0.1703
-## Detection Prevalence   0.3028   0.1751   0.1958   0.1547   0.1716
-## Balanced Accuracy      0.9765   0.9240   0.9463   0.9385   0.9625</code></pre>
-<pre class="r"><code>accuracyOnValSetKsvm &lt;- cmOnValSetKsvm$overall['Accuracy']</code></pre>
-<p>The accuracy is 92.5%, which is indeed worse than the random forest model.</p>
-</div>
-</div>
-<div id="apply-final-model-on-test-data-set" class="section level2">
-<h2>Apply Final Model on Test Data Set</h2>
-<p>Among the two models I tried, random forest was better, on the training set as well as on the validation set. Therefore I will once more calculate the accuracy on an unknown data set, the test data set:</p>
-<pre class="r"><code>predictionsOnTestSetRandomForest &lt;- predict(modelRandomForest, newdata=testSet)
-cmOnTestSetRandomForest &lt;- confusionMatrix(predictionsOnTestSetRandomForest, testSet$classe)
-cmOnTestSetRandomForest</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1116    3    0    0    0
-##          B    0  755    4    0    0
-##          C    0    1  680   14    1
-##          D    0    0    0  629    5
-##          E    0    0    0    0  715
-## 
-## Overall Statistics
-##                                           
-##                Accuracy : 0.9929          
-##                  95% CI : (0.9897, 0.9953)
-##     No Information Rate : 0.2845          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.991           
-##  Mcnemar's Test P-Value : NA              
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            1.0000   0.9947   0.9942   0.9782   0.9917
-## Specificity            0.9989   0.9987   0.9951   0.9985   1.0000
-## Pos Pred Value         0.9973   0.9947   0.9770   0.9921   1.0000
-## Neg Pred Value         1.0000   0.9987   0.9988   0.9957   0.9981
-## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2845   0.1925   0.1733   0.1603   0.1823
-## Detection Prevalence   0.2852   0.1935   0.1774   0.1616   0.1823
-## Balanced Accuracy      0.9995   0.9967   0.9946   0.9884   0.9958</code></pre>
-<pre class="r"><code>accuracyOnTestSetRandomForest &lt;- cmOnTestSetRandomForest$overall['Accuracy']</code></pre>
-<p><em>The accuracy is 99.3%, the same as it was on the validation set. That the values are the same is a good sign that the model will deal well with unknown data. The predicted out of sample error is 1 - accuracy = 0.7%.</em></p>
-</div>
-<div id="predict-on-quizz-data" class="section level2">
-<h2>Predict on Quizz Data</h2>
-<p>Load quizz data set:</p>
-<pre class="r"><code>quizzDataSet &lt;- read.csv(file=&quot;pml-testing.csv&quot;, header=TRUE, sep=&quot;,&quot;, na.strings=c(&quot;NA&quot;, &quot;&quot;, &quot;#DIV/0!&quot;)) </code></pre>
-<p>No useless variables were removed, as they do not “hurt”. I note that normally, any preprocessing that was previously done on the training set, should equally be applied to any other validation, test, or quizz data set. This is especially true for dealing with NAs and NANs, and preprocessing such as box cox transformation.</p>
-<pre class="r"><code>predictionsOnQuizzSetWithRandomForest &lt;- predict(modelRandomForest, newdata=quizzDataSet)
-predictionsOnQuizzSetWithRandomForest</code></pre>
-<pre><code>##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
-##  B  A  B  A  A  E  D  B  A  A  B  C  B  A  E  E  A  B  B  B 
-## Levels: A B C D E</code></pre>
-<pre class="r"><code>answers &lt;- predictionsOnQuizzSetWithRandomForest</code></pre>
-<p>The following script was supplied in the assignment tasks. It writes single text files for each of the quizz data set rows. In each text file, the class will be written (A, B, C, D or E)</p>
-<pre><code>pml_write_files = function(x){
-    n = length(x)
-    for(i in 1:n){
-        filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
-        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-    }
-}
-
-pml_write_files(answers)</code></pre>
-<p>It is noted that all the test set data were classified correctly!</p>
-</div>
-<div id="test-with-longer-execution-times." class="section level2">
-<h2>Test with longer execution times.</h2>
 <div id="setting-up-parallel-processing" class="section level3">
 <h3>Setting up parallel processing</h3>
+<p>Before starting the training, I will set up some workers for parallel computation.</p>
 <pre class="r"><code>library(doParallel)</code></pre>
 <pre><code>## Loading required package: foreach
 ## Loading required package: iterators
@@ -354,9 +133,13 @@ getDoParWorkers()</code></pre>
 <pre><code>## [1] 7</code></pre>
 <p>Caret should be able to use these workers without the user doing anything. Note that allowParallel = TRUE is the default in trainControl().</p>
 </div>
-<div id="caret-train-with-random-forest" class="section level3">
-<h3>Caret train() with random forest</h3>
-<p>Let’s try again the caret train, this time with some cross validation.</p>
+<div id="random-forest-model" class="section level3">
+<h3>Random Forest Model</h3>
+<p>The random forest model will be used as the first model fit. The random forest model seems to be a good choice in most classification problems. See for example in “Do we need Hundreds of Classifiers to Solve Real World Classification Problems” in Journal of Machine Learning Reserach 15 (2014) 3133-3181. The result of that paper is that</p>
+<blockquote>
+<p>“The best results are achieved by the parallel random forest (parRF t), implemented in R with caret, tuning the parameter mtry. The parRF t achieves in average 94.1% of the maximum accuracy over all the data sets (Table 5, lower part), and overcomes the 90% of the maximum accuracy in 102 out of 121 data sets. Its average accuracy over all the data sets is 82.0%, while the maximum average accuracy (achieved by the best classifier for each data set) is 86.9%. The random forest in R and tuned with caret (rf t) is slightly worse (93.6% of the maximum accuracy), although it achieves slightly better average accuracy (82.3%) than parRF t.”</p>
+</blockquote>
+<p>To get an idea of the computation speed, I started a model fit using the pure randomForest() function from the randomForest library. The following model includes some cross-validation and an increased tuneLength:</p>
 <pre class="r"><code>set.seed(2343)
 seeds &lt;- vector(mode = &quot;list&quot;, length = 50) # 50 = 7 * 7 +1
 for(i in 1:49) seeds[[i]] &lt;- sample.int(1000, 7)
@@ -370,11 +153,14 @@ modelFitCaretRf &lt;- train(classe~.,
                                 data=trainSet, 
                                 method=&quot;rf&quot;,
                                 trControl=ctrl,
-                                tuneLength=7)
-ptmDiff &lt;- proc.time() - ptm1 # Stop clock
+                                tuneLength=7)</code></pre>
+<pre><code>## Loading required package: randomForest
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.</code></pre>
+<pre class="r"><code>ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   50.76    0.25  499.94</code></pre>
+##   48.16    0.31  500.08</code></pre>
 <pre class="r"><code>modelFitCaretRf</code></pre>
 <pre><code>## Random Forest 
 ## 
@@ -400,80 +186,11 @@ ptmDiff</code></pre>
 ## 
 ## Accuracy was used to select the optimal model using  the largest value.
 ## The final value used for the model was mtry = 10.</code></pre>
-<pre class="r"><code>predictionsOnValSetCaretRf &lt;- predict(modelFitCaretRf, newdata=valSet)
-cmOnValSetCaretRf &lt;- confusionMatrix(predictionsOnValSetCaretRf, valSet$classe)
-cmOnValSetCaretRf</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1114    4    0    0    0
-##          B    1  755    5    0    0
-##          C    0    0  679    6    0
-##          D    0    0    0  637    6
-##          E    1    0    0    0  715
-## 
-## Overall Statistics
-##                                           
-##                Accuracy : 0.9941          
-##                  95% CI : (0.9912, 0.9963)
-##     No Information Rate : 0.2845          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.9926          
-##  Mcnemar's Test P-Value : NA              
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9982   0.9947   0.9927   0.9907   0.9917
-## Specificity            0.9986   0.9981   0.9981   0.9982   0.9997
-## Pos Pred Value         0.9964   0.9921   0.9912   0.9907   0.9986
-## Neg Pred Value         0.9993   0.9987   0.9985   0.9982   0.9981
-## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2840   0.1925   0.1731   0.1624   0.1823
-## Detection Prevalence   0.2850   0.1940   0.1746   0.1639   0.1825
-## Balanced Accuracy      0.9984   0.9964   0.9954   0.9944   0.9957</code></pre>
-<pre class="r"><code>accuracyOnValSetCaretRf &lt;- cmOnValSetCaretRf$overall['Accuracy']
-
-predictionsOnTestSetCaretRf &lt;- predict(modelFitCaretRf, newdata=testSet)
-cmOnTestSetCaretRf &lt;- confusionMatrix(predictionsOnTestSetCaretRf, testSet$classe)
-cmOnTestSetCaretRf</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1116    5    0    0    0
-##          B    0  753    4    0    0
-##          C    0    1  680   11    1
-##          D    0    0    0  632    5
-##          E    0    0    0    0  715
-## 
-## Overall Statistics
-##                                         
-##                Accuracy : 0.9931        
-##                  95% CI : (0.99, 0.9955)
-##     No Information Rate : 0.2845        
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16     
-##                                         
-##                   Kappa : 0.9913        
-##  Mcnemar's Test P-Value : NA            
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            1.0000   0.9921   0.9942   0.9829   0.9917
-## Specificity            0.9982   0.9987   0.9960   0.9985   1.0000
-## Pos Pred Value         0.9955   0.9947   0.9812   0.9922   1.0000
-## Neg Pred Value         1.0000   0.9981   0.9988   0.9967   0.9981
-## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2845   0.1919   0.1733   0.1611   0.1823
-## Detection Prevalence   0.2858   0.1930   0.1767   0.1624   0.1823
-## Balanced Accuracy      0.9991   0.9954   0.9951   0.9907   0.9958</code></pre>
-<pre class="r"><code>accuracyOnTestSetCaretRf &lt;- cmOnTestSetCaretRf$overall['Accuracy']</code></pre>
 </div>
-<div id="caret-train-with-support-vector-machine-model" class="section level3">
-<h3>Caret train() with support vector machine model</h3>
+<div id="support-vector-machine-model" class="section level3">
+<h3>Support Vector Machine Model</h3>
+<p>Another strong model with regards to accuracy in classification problems is the support vector machine model. This will be used in the following. First I used directly kerlab’s ksvm() with a support vector machine model with radial basis functions. This way I got an idea of the computation time. In the following, carets train() function is used, together with some cross-validation and an increased tuneLength.</p>
+<pre class="r"><code>library(kernlab)</code></pre>
 <pre class="r"><code>set.seed(2343)
 seeds &lt;- vector(mode = &quot;list&quot;, length = 99) # 99 = 7 * 14 + 1
 for(i in 1:98) seeds[[i]] &lt;- sample.int(1000, 14)
@@ -491,7 +208,7 @@ modelFitCaretSvm &lt;- train(classe~.,
 ptmDiff &lt;- proc.time() - ptm1 # Stop clock
 ptmDiff</code></pre>
 <pre><code>##    user  system elapsed 
-##   17.88    0.56  318.58</code></pre>
+##    9.78    0.50  319.79</code></pre>
 <pre class="r"><code>modelFitCaretSvm</code></pre>
 <pre><code>## Support Vector Machines with Radial Basis Function Kernel 
 ## 
@@ -525,6 +242,53 @@ ptmDiff</code></pre>
 ## Tuning parameter 'sigma' was held constant at a value of 0.01255074
 ## Accuracy was used to select the optimal model using  the largest value.
 ## The final values used for the model were sigma = 0.01255074 and C = 128.</code></pre>
+</div>
+</div>
+<div id="choose-model-by-predicting-with-various-models-on-validation-set" class="section level2">
+<h2>Choose Model by Predicting with Various Models on Validation Set</h2>
+<div id="random-forest-model-1" class="section level3">
+<h3>Random Forest Model</h3>
+<pre class="r"><code>predictionsOnValSetCaretRf &lt;- predict(modelFitCaretRf, newdata=valSet)</code></pre>
+<pre><code>## Loading required package: randomForest
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.</code></pre>
+<pre class="r"><code>cmOnValSetCaretRf &lt;- confusionMatrix(predictionsOnValSetCaretRf, valSet$classe)
+cmOnValSetCaretRf</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1114    4    0    0    0
+##          B    1  755    5    0    0
+##          C    0    0  679    6    0
+##          D    0    0    0  637    6
+##          E    1    0    0    0  715
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9941          
+##                  95% CI : (0.9912, 0.9963)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9926          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9982   0.9947   0.9927   0.9907   0.9917
+## Specificity            0.9986   0.9981   0.9981   0.9982   0.9997
+## Pos Pred Value         0.9964   0.9921   0.9912   0.9907   0.9986
+## Neg Pred Value         0.9993   0.9987   0.9985   0.9982   0.9981
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2840   0.1925   0.1731   0.1624   0.1823
+## Detection Prevalence   0.2850   0.1940   0.1746   0.1639   0.1825
+## Balanced Accuracy      0.9984   0.9964   0.9954   0.9944   0.9957</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretRf &lt;- cmOnValSetCaretRf$overall['Accuracy']</code></pre>
+</div>
+<div id="support-vector-machine-model-1" class="section level3">
+<h3>Support Vector Machine Model</h3>
 <pre class="r"><code>predictionsOnValSetCaretSvm &lt;- predict(modelFitCaretSvm, newdata=valSet)
 cmOnValSetCaretSvm &lt;- confusionMatrix(predictionsOnValSetCaretSvm, valSet$classe)
 cmOnValSetCaretSvm</code></pre>
@@ -559,65 +323,90 @@ cmOnValSetCaretSvm</code></pre>
 ## Detection Rate         0.2835   0.1919   0.1728   0.1603   0.1828
 ## Detection Prevalence   0.2842   0.1935   0.1774   0.1611   0.1838
 ## Balanced Accuracy      0.9977   0.9951   0.9928   0.9887   0.9966</code></pre>
-<pre class="r"><code>accuracyOnValSetCaretSvm &lt;- cmOnValSetCaretSvm$overall['Accuracy']
-
-predictionsOnTestSetCaretSvm &lt;- predict(modelFitCaretSvm, newdata=testSet)
-cmOnTestSetCaretSvm &lt;- confusionMatrix(predictionsOnTestSetCaretSvm, testSet$classe)
-cmOnTestSetCaretSvm</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretSvm &lt;- cmOnValSetCaretSvm$overall['Accuracy']</code></pre>
+</div>
+<div id="comparison-of-both-models" class="section level3">
+<h3>Comparison of both models</h3>
+<pre class="r"><code>accuracyOnValSetCaretRf</code></pre>
+<pre><code>##  Accuracy 
+## 0.9941371</code></pre>
+<pre class="r"><code>accuracyOnValSetCaretSvm</code></pre>
+<pre><code>##  Accuracy 
+## 0.9913332</code></pre>
+<p>We saw that by using the higher tuneLength in the SVM model, the accuracy of this model almost matched the one of the random forest, but even then it was still a bit behind. The random forest model had a very high accuracy already in the second step.</p>
+</div>
+</div>
+<div id="apply-final-model-on-test-data-set" class="section level2">
+<h2>Apply Final Model on Test Data Set</h2>
+<p>Among the two models I tried, random forest was better, on the training set as well as on the validation set. Therefore I will once more calculate the accuracy on an unknown data set, the test data set:</p>
+<pre class="r"><code>predictionsOnTestSetCaretRf &lt;- predict(modelFitCaretRf, newdata=testSet)
+cmOnTestSetCaretRf &lt;- confusionMatrix(predictionsOnTestSetCaretRf, testSet$classe)
+cmOnTestSetCaretRf</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1113    5    0    0    0
-##          B    2  752    2    0    0
-##          C    0    2  680   20    0
-##          D    0    0    2  623    4
-##          E    1    0    0    0  717
+##          A 1116    5    0    0    0
+##          B    0  753    4    0    0
+##          C    0    1  680   11    1
+##          D    0    0    0  632    5
+##          E    0    0    0    0  715
 ## 
 ## Overall Statistics
-##                                           
-##                Accuracy : 0.9903          
-##                  95% CI : (0.9867, 0.9931)
-##     No Information Rate : 0.2845          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.9877          
-##  Mcnemar's Test P-Value : NA              
+##                                         
+##                Accuracy : 0.9931        
+##                  95% CI : (0.99, 0.9955)
+##     No Information Rate : 0.2845        
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16     
+##                                         
+##                   Kappa : 0.9913        
+##  Mcnemar's Test P-Value : NA            
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9973   0.9908   0.9942   0.9689   0.9945
-## Specificity            0.9982   0.9987   0.9932   0.9982   0.9997
-## Pos Pred Value         0.9955   0.9947   0.9687   0.9905   0.9986
-## Neg Pred Value         0.9989   0.9978   0.9988   0.9939   0.9988
+## Sensitivity            1.0000   0.9921   0.9942   0.9829   0.9917
+## Specificity            0.9982   0.9987   0.9960   0.9985   1.0000
+## Pos Pred Value         0.9955   0.9947   0.9812   0.9922   1.0000
+## Neg Pred Value         1.0000   0.9981   0.9988   0.9967   0.9981
 ## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2837   0.1917   0.1733   0.1588   0.1828
-## Detection Prevalence   0.2850   0.1927   0.1789   0.1603   0.1830
-## Balanced Accuracy      0.9978   0.9948   0.9937   0.9835   0.9971</code></pre>
-<pre class="r"><code>accuracyOnTestSetCaretSvm &lt;- cmOnTestSetCaretSvm$overall['Accuracy']</code></pre>
-<pre class="r"><code>accuracyOnValSetRandomForest</code></pre>
-<pre><code>##  Accuracy 
-## 0.9931175</code></pre>
-<pre class="r"><code>accuracyOnTestSetRandomForest</code></pre>
-<pre><code>##  Accuracy 
-## 0.9928626</code></pre>
-<pre class="r"><code>accuracyOnValSetCaretRf</code></pre>
-<pre><code>##  Accuracy 
-## 0.9941371</code></pre>
+## Detection Rate         0.2845   0.1919   0.1733   0.1611   0.1823
+## Detection Prevalence   0.2858   0.1930   0.1767   0.1624   0.1823
+## Balanced Accuracy      0.9991   0.9954   0.9951   0.9907   0.9958</code></pre>
+<pre class="r"><code>accuracyOnTestSetCaretRf &lt;- cmOnTestSetCaretRf$overall['Accuracy']</code></pre>
+<div id="out-of-sample-error" class="section level3">
+<h3>Out of sample error</h3>
 <pre class="r"><code>accuracyOnTestSetCaretRf</code></pre>
 <pre><code>##  Accuracy 
 ## 0.9931175</code></pre>
-<pre class="r"><code>accuracyOnValSetKsvm</code></pre>
-<pre><code>##  Accuracy 
-## 0.9248024</code></pre>
-<pre class="r"><code>accuracyOnValSetCaretSvm</code></pre>
-<pre><code>##  Accuracy 
-## 0.9913332</code></pre>
-<pre class="r"><code>accuracyOnTestSetCaretSvm</code></pre>
-<pre><code>##  Accuracy 
-## 0.9903135</code></pre>
+<pre class="r"><code>outOfSampleError &lt;- 1 - accuracyOnTestSetCaretRf
+outOfSampleError</code></pre>
+<pre><code>##    Accuracy 
+## 0.006882488</code></pre>
+<p>The accuracy on the validation set was only 0.1% different from that of the test set, wich is is a good sign that the model will deal well with unknown data and was not overfitted to the training data set. The predicted out of sample error is 0.6882488 %.</p>
 </div>
+</div>
+<div id="predict-on-quizz-data" class="section level2">
+<h2>Predict on Quizz Data</h2>
+<p>Load quizz data set:</p>
+<pre class="r"><code>quizzDataSet &lt;- read.csv(file=&quot;pml-testing.csv&quot;, header=TRUE, sep=&quot;,&quot;, na.strings=c(&quot;NA&quot;, &quot;&quot;, &quot;#DIV/0!&quot;)) </code></pre>
+<p>No useless variables were removed, as they do not “hurt”. I note that normally, any preprocessing that was previously done on the training set, should equally be applied to any other validation, test, or quizz data set. This is especially true for dealing with NAs and NANs, and preprocessing such as box cox transformation.</p>
+<pre class="r"><code>predictionsOnQuizzSetCaretRf &lt;- predict(modelFitCaretRf, newdata=quizzDataSet)
+predictionsOnQuizzSetCaretRf</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+<pre class="r"><code>answers &lt;- predictionsOnQuizzSetCaretRf</code></pre>
+<p>The following script was supplied in the assignment tasks. It writes single text files for each of the quizz data set rows. In each text file, the class will be written (A, B, C, D or E)</p>
+<pre><code>pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+pml_write_files(answers)</code></pre>
+<p>It is noted that all the test set data were classified correctly!</p>
 </div>
 
 

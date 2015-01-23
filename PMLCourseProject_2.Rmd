@@ -31,7 +31,7 @@ thresholdNA <- 19215
 lvNotTooManyNAs <- vector(mode="logical", length=ncol(data)) 
 ```
 lv stands for logical vector. As the name suggests, a value is TRUE if there are not too many NAs in a certain column. 
-The following code wills the logical vector:
+The following code creates the logical vector:
 ```{r}
 for (i in 1:ncol(data)) {
     if (length(which(is.na(data[ , i]))) > thresholdNA) {
@@ -113,7 +113,7 @@ The random forest model will be used as the first model fit. The random forest m
 
 >"The best results are achieved by the parallel random forest (parRF t), implemented in R with caret, tuning the parameter mtry. The parRF t achieves in average 94.1% of the maximum accuracy over all the data sets (Table 5, lower part), and overcomes the 90% of the maximum accuracy in 102 out of 121 data sets. Its average accuracy over all the data sets is 82.0%, while the maximum average accuracy (achieved by the best classifier for each data set) is 86.9%. The random forest in R and tuned with caret (rf t) is slightly worse (93.6% of the maximum accuracy), although it achieves slightly better average accuracy (82.3%) than parRF t." 
 
-With some prior test with the pure randomForest() function from the randomForest library to find out how quickly a single training can be done, the following model including some cross-validation is carried out:
+To get an idea of the computation speed, I started a model fit using the pure randomForest() function from the randomForest library. The following model includes some cross-validation and an increased tuneLength:
 ```{r caretRf train, cache=TRUE}
 set.seed(2343)
 seeds <- vector(mode = "list", length = 50) # 50 = 7 * 7 +1
@@ -200,7 +200,7 @@ accuracyOnTestSetCaretRf
 outOfSampleError <- 1 - accuracyOnTestSetCaretRf
 outOfSampleError
 ```
-The accuracy on the validation set was pretty equal to that of the test set, wich is is a good sign that the model will deal well with unknown data and was not overfitted to the training data set. The predicted out of sample error is `r outOfSampleError`. 
+The accuracy on the validation set was only 0.1% different from that of the test set, wich is is a good sign that the model will deal well with unknown data and was not overfitted to the training data set. The predicted out of sample error is `r outOfSampleError*100` %. 
 
 ## Predict on Quizz Data
 
