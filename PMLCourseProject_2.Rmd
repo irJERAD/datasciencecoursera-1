@@ -161,6 +161,8 @@ modelFitCaretSvm
 
 ## Choose Model by Predicting with Various Models on Validation Set
 ### Random Forest Model
+First of all, it is noted that "In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run,..." (http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#workings) This error is called the out-of-bag (oob) error estimate. But because this is a rather special feature of random forest models, and I have not only used the random forest model, I used the standard method of splitting the data into training and test sets nevertheless. 
+
 ```{r predict on valSet with caretRf}
 predictionsOnValSetCaretRf <- predict(modelFitCaretRf, newdata=valSet)
 cmOnValSetCaretRf <- confusionMatrix(predictionsOnValSetCaretRf, valSet$classe)
@@ -230,3 +232,4 @@ pml_write_files = function(x){
 pml_write_files(answers)
 ```
 It is noted that all the test set data were classified correctly!
+

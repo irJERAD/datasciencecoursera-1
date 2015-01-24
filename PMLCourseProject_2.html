@@ -248,6 +248,7 @@ ptmDiff</code></pre>
 <h2>Choose Model by Predicting with Various Models on Validation Set</h2>
 <div id="random-forest-model-1" class="section level3">
 <h3>Random Forest Model</h3>
+<p>First of all, it is noted that “In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run,…” (<a href="http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#workings">http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#workings</a>) This error is called the out-of-bag (oob) error estimate. But because this is a rather special feature of random forest models, and I have not only used the random forest model, I used the standard method of splitting the data into training and test sets nevertheless.</p>
 <pre class="r"><code>predictionsOnValSetCaretRf &lt;- predict(modelFitCaretRf, newdata=valSet)</code></pre>
 <pre><code>## Loading required package: randomForest
 ## randomForest 4.6-10
